@@ -1093,61 +1093,67 @@ function spawnObjects() {
     
     const now = Date.now();
     
-    // More natural random intervals
-    const baseInterval = isBossFight ? 1500 : 2000; // Base time between spawns
-    const chapterMultiplier = 1 - (currentChapter - 1) * 0.2; // Chapter 1: 1x, Chapter 2: 0.8x, Chapter 3: 0.6x
+    // Much more spaced out intervals - give player time to react
+    const baseInterval = isBossFight ? 2500 : 3500; // Longer base intervals
+    const chapterMultiplier = 1 - (currentChapter - 1) * 0.15; // Gentler scaling
     const batInterval = baseInterval * chapterMultiplier;
     
-    // Add randomness to spawn timing (±50% variation)
-    const randomVariation = 0.5 + Math.random(); // 0.5 to 1.5
+    // Wider variation for more natural feel
+    const randomVariation = 0.6 + Math.random() * 0.8; // 0.6 to 1.4
     const actualBatInterval = batInterval * randomVariation;
     
-    // Spawn bats with natural timing
+    // Spawn bats with much better spacing
     if (now - lastBatSpawn > actualBatInterval) {
-        // Random chance to spawn (not every interval)
-        if (Math.random() < 0.7) { // 70% chance to spawn when interval reached
+        if (Math.random() < 0.6) { // Lower chance for more space
             const lane = Math.floor(Math.random() * 3);
             enemies.push(new Bat(lane));
             lastBatSpawn = now;
             
-            // Chapter-based multi-spawn with delays
-            if (currentChapter >= 2 && Math.random() < 0.25) {
-                const delay = 400 + Math.random() * 600; // 400-1000ms delay
+            // Multi-spawn with much longer delays - avoid clustering
+            if (currentChapter >= 2 && Math.random() < 0.2) { // Lower chance
+                const delay = 1200 + Math.random() * 1000; // 1200-2200ms - much longer
                 setTimeout(() => {
-                    if (gameState === 'playing') {
+                    if (gameState === 'playing' && now - lastBatSpawn > 800) { // Ensure gap
                         const lane2 = Math.floor(Math.random() * 3);
                         enemies.push(new Bat(lane2));
                     }
                 }, delay);
             }
-            if (currentChapter >= 3 && Math.random() < 0.15) {
-                const delay = 800 + Math.random() * 800; // 800-1600ms delay
+            if (currentChapter >= 3 && Math.random() < 0.1) { // Much lower chance
+                const delay = 2000 + Math.random() * 1500; // 2000-3500ms - very long delay
                 setTimeout(() => {
-                    if (gameState === 'playing') {
+                    if (gameState === 'playing' && now - lastBatSpawn > 1200) { // Ensure bigger gap
                         const lane3 = Math.floor(Math.random() * 3);
                         enemies.push(new Bat(lane3));
                     }
                 }, delay);
             }
         } else {
-            // Skip this spawn but reset timer with shorter interval
-            lastBatSpawn = now - actualBatInterval * 0.3;
+            // Reset timer but with longer gap
+            lastBatSpawn = now - actualBatInterval * 0.5;
         }
     }
     
-    // Question mark spawn with natural variation
-    const questionBaseInterval = isBossFight ? 4000 : 6000;
-    const questionVariation = 0.7 + Math.random() * 0.6; // 0.7 to 1.3
+    // Question marks with better spacing - avoid interference with bats
+    const questionBaseInterval = isBossFight ? 6000 : 8000; // Much longer intervals
+    const questionVariation = 0.8 + Math.random() * 0.5; // 0.8 to 1.3
     const actualQuestionInterval = questionBaseInterval * questionVariation;
     
-    if (questionsAnswered < 5 && now - lastQuestionSpawn > actualQuestionInterval) {
-        if (Math.random() < 0.8) { // 80% chance when interval reached
+    // Ensure question marks don't spawn too close to bat spawns
+    const timeSinceLastBat = now - lastBatSpawn;
+    const minGapFromBat = 2000; // 2 second minimum gap
+    
+    if (questionsAnswered < 5 && 
+        now - lastQuestionSpawn > actualQuestionInterval && 
+        timeSinceLastBat > minGapFromBat) {
+        
+        if (Math.random() < 0.7) { // Lower chance for better spacing
             const lane = Math.floor(Math.random() * 3);
             questionMarks.push(new QuestionMark(lane));
             lastQuestionSpawn = now;
         } else {
-            // Skip but reset with shorter interval
-            lastQuestionSpawn = now - actualQuestionInterval * 0.4;
+            // Reset with shorter interval
+            lastQuestionSpawn = now - actualQuestionInterval * 0.6;
         }
     }
 }
