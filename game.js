@@ -899,10 +899,20 @@ function startBossFight() {
     questionMarks = []; // Clear question marks
     currentQuestionIndex = 0; // Reset for boss questions
     questionsAnswered = 0;
+    lastQuestionSpawn = 0; // Reset question spawn timer để spawn ngay lập tức
+    lastBatSpawn = Date.now(); // Reset bat spawn timer
     updateUI();
     
     showPause('👹 Boss Xuất Hiện!', `${boss.name} đã xuất hiện! Thu thập dấu ? để trả lời câu hỏi boss và gây sát thương!`, () => {
         gameState = 'playing';
+        // Spawn một câu hỏi ngay lập tức khi boss fight bắt đầu
+        setTimeout(() => {
+            if (isBossFight && questionsAnswered < 5) {
+                const lane = Math.floor(Math.random() * 3);
+                questionMarks.push(new QuestionMark(lane));
+                lastQuestionSpawn = Date.now();
+            }
+        }, 1000); // Spawn sau 1 giây
     });
 }
 
@@ -1134,20 +1144,25 @@ function spawnObjects() {
         }
     }
     
-    // Question marks with better spacing - avoid interference with bats
-    const questionBaseInterval = isBossFight ? 6000 : 8000; // Much longer intervals
-    const questionVariation = 0.8 + Math.random() * 0.5; // 0.8 to 1.3
+    // Question marks with better spacing - more frequent during boss fight
+    const questionBaseInterval = isBossFight ? 3000 : 8000; // Much shorter for boss fights
+    const questionVariation = isBossFight ? (0.6 + Math.random() * 0.4) : (0.8 + Math.random() * 0.5); // 0.6-1.0 for boss, 0.8-1.3 for normal
     const actualQuestionInterval = questionBaseInterval * questionVariation;
     
-    // Ensure question marks don't spawn too close to bat spawns
+    // Reduce gap requirement during boss fights
     const timeSinceLastBat = now - lastBatSpawn;
-    const minGapFromBat = 2000; // 2 second minimum gap
+    const minGapFromBat = isBossFight ? 1000 : 2000; // Shorter gap during boss fight
     
-    if (questionsAnswered < 5 && 
+    // For boss fights, check boss questions answered instead of regular questions
+    const maxQuestions = isBossFight ? 5 : 5;
+    const currentQuestionsAnswered = isBossFight ? questionsAnswered : questionsAnswered;
+    
+    if (currentQuestionsAnswered < maxQuestions && 
         now - lastQuestionSpawn > actualQuestionInterval && 
         timeSinceLastBat > minGapFromBat) {
         
-        if (Math.random() < 0.7) { // Lower chance for better spacing
+        const spawnChance = isBossFight ? 0.9 : 0.7; // Higher chance during boss fight
+        if (Math.random() < spawnChance) {
             const lane = Math.floor(Math.random() * 3);
             questionMarks.push(new QuestionMark(lane));
             lastQuestionSpawn = now;
