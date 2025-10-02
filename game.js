@@ -344,6 +344,12 @@ function initGame() {
 
 // Main game loop
 function gameLoop(currentTime) {
+    // Always clear and draw, even in menu state
+    if (canvas && ctx) {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        drawBackground();
+    }
+    
     if (gameState === 'playing') {
         if (lastTime === 0) lastTime = currentTime;
         const deltaTime = currentTime - lastTime;
@@ -365,9 +371,6 @@ function gameLoop(currentTime) {
         questionMarks = questionMarks.filter(qmark => !qmark.isOffScreen());
         
         spawnObjects();
-        
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        drawBackground();
         
         if (airplane) airplane.draw();
         enemies.forEach(enemy => enemy.draw());
@@ -409,17 +412,35 @@ document.addEventListener('keydown', (e) => {
 
 // Initialize when DOM is ready
 document.addEventListener('DOMContentLoaded', () => {
+    console.log('DOM loaded, initializing game...');
+    
     // Start button event
     const startBtn = document.getElementById('startBtn');
-    if (startBtn) {
-        startBtn.addEventListener('click', () => {
-            gameState = 'playing';
-            initGame();
-            requestAnimationFrame(gameLoop);
-        });
+    const gameCanvas = document.getElementById('gameCanvas');
+    
+    if (!gameCanvas) {
+        console.error('Canvas not found!');
+        return;
     }
     
-    // Initialize game
+    if (startBtn) {
+        console.log('Start button found, adding event listener');
+        startBtn.addEventListener('click', () => {
+            console.log('Start button clicked!');
+            gameState = 'playing';
+            initGame();
+            console.log('Game initialized, starting game loop');
+            requestAnimationFrame(gameLoop);
+        });
+    } else {
+        console.error('Start button not found!');
+    }
+    
+    // Initialize game in menu state
+    gameState = 'start';
     initGame();
+    console.log('Initial game setup complete');
+    
+    // Start the game loop immediately
     requestAnimationFrame(gameLoop);
 });
