@@ -3,12 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tank Quiz Runner</title>
+    <title>Girl Runner Quiz Game</title>
     <style>
         body {
             margin: 0;
             padding: 20px;
-            background: linear-gradient(135deg, #1e3c72, #2a5298);
+            background: linear-gradient(135deg, #87CEEB, #98D8E8);
             font-family: 'Arial', sans-serif;
             min-height: 100vh;
         }
@@ -30,7 +30,7 @@
         }
         
         #gameCanvas {
-            background: linear-gradient(to bottom, #2c3e50 0%, #34495e 50%, #2c3e50 100%);
+            background: linear-gradient(to bottom, #87CEEB 0%, #98D8E8 50%, #B0E0E6 100%);
             display: block;
         }
         
@@ -73,6 +73,50 @@
             border-radius: 5px;
             margin: 5px 0;
             border: 1px solid #00ff00;
+        }
+        
+        .history-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 5px 8px;
+            margin: 3px 0;
+            background: rgba(255,255,255,0.1);
+            border-radius: 5px;
+            font-size: 12px;
+            border-left: 3px solid #FFD700;
+        }
+        
+        .history-icon {
+            font-size: 14px;
+            flex-shrink: 0;
+        }
+        
+        .history-text {
+            flex: 1;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        
+        .powerup-item {
+            background: rgba(255,215,0,0.2);
+            border: 1px solid #FFD700;
+            border-radius: 5px;
+            padding: 5px 8px;
+            margin: 3px 0;
+            font-size: 11px;
+            line-height: 1.3;
+        }
+        
+        .powerup-name {
+            font-weight: bold;
+            color: #FFD700;
+        }
+        
+        .powerup-desc {
+            color: #E0E0E0;
+            font-size: 10px;
         }
         
         #quizModal {
@@ -239,12 +283,10 @@
             </div>
             
             <div class="ui-section">
-                <h3>💪 Buffs</h3>
-                <div id="buffContainer">
-                    <div id="shootBuff" class="buff-item" style="display: none;">🔫 Có thể bắn</div>
-                    <div id="shield" class="buff-item" style="display: none;">🛡️ Khiên bảo vệ</div>
+                <h3>⚡ Powerups hiện có</h3>
+                <div id="powerupContainer" style="max-height: 200px; overflow-y: auto;">
+                    <div id="noPowerups" style="color: #999; font-style: italic; text-align: center;">Chưa có powerup nào</div>
                 </div>
-                <div id="noBuffs" style="color: #999; font-style: italic;">Chưa có buff nào</div>
             </div>
             
             <div class="ui-section" id="bossSection" style="display: none;">
@@ -262,17 +304,119 @@
             </div>
             
             <div class="ui-section">
-                <h3>🎯 Điều khiển</h3>
-                <div style="font-size: 12px; line-height: 1.6;">
-                    <div>← → hoặc A/D: Di chuyển</div>
-                    <div>Space: Bắn (khi có buff)</div>
-                    <div>Tránh dơi 🦇</div>
-                    <div>Thu thập dấu ? để quiz</div>
+                <div style="text-align: center; padding: 10px; background: rgba(255,255,255,0.1); border-radius: 8px; font-size: 14px;">
+                    <div style="color: #FFD700; font-weight: bold; margin-bottom: 5px;">⌨️ Phím tắt</div>
+                    <div style="font-size: 12px; color: #ddd;">Bấm <span style="background: #333; padding: 2px 6px; border-radius: 4px; color: #FFD700;">ESC</span> để xem menu</div>
                 </div>
             </div>
         </div>
     </div>
         
+        <div id="escMenu" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 1000; justify-content: center; align-items: center;">
+            <div style="background: linear-gradient(145deg, #2a2a2a, #1a1a1a); border: 3px solid #FFD700; border-radius: 15px; padding: 30px; max-width: 80%; max-height: 80%; overflow-y: auto; box-shadow: 0 0 30px rgba(255,215,0,0.3);">
+                <div style="text-align: center; margin-bottom: 20px;">
+                    <h2 style="color: #FFD700; margin: 0; text-shadow: 2px 2px 4px rgba(0,0,0,0.8);">📚 MENU GAME</h2>
+                    <p style="color: #ddd; margin: 5px 0;">Bấm ESC để đóng menu</p>
+                </div>
+                
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                    <!-- Cột trái: Hướng dẫn và điều khiển -->
+                    <div>
+                        <div style="background: rgba(255,255,255,0.1); border-radius: 10px; padding: 15px; margin-bottom: 15px;">
+                            <h3 style="color: #87CEEB; margin: 0 0 10px 0;">🎯 Điều khiển</h3>
+                            <div style="font-size: 14px; line-height: 1.6; color: #ddd;">
+                                <div>← → hoặc A/D: Di chuyển</div>
+                                <div>Space: Bắn (khi có powerup)</div>
+                                <div>Thu thập dấu ? để chọn powerup</div>
+                                <div>ESC: Mở/đóng menu này</div>
+                            </div>
+                        </div>
+                        
+                        <div style="background: rgba(255,255,255,0.1); border-radius: 10px; padding: 15px;">
+                            <h3 style="color: #FF6B6B; margin: 0 0 10px 0;">👾 Quái vật theo chương</h3>
+                            <div style="font-size: 12px; line-height: 1.4; color: #ddd;">
+                                <div style="color: #87CEEB; font-weight: bold; margin-bottom: 5px;">Chương 1 - Bầu trời:</div>
+                                <div>🦇 Dơi: Bay thẳng</div>
+                                <div>🦅 Đại bàng: Lao xuống đổi lane</div>
+                                <div>⛈️ Mây bão: Bắn sét</div>
+                                
+                                <div style="color: #4682B4; font-weight: bold; margin: 10px 0 5px 0;">Chương 2 - Đại dương:</div>
+                                <div>🦈 Cá mập: Tăng tốc khi gần</div>
+                                <div>🎐 Sứa: Tạo trường điện</div>
+                                <div>🐴 Cá ngựa: Bay zic-zac, tạo bong bóng</div>
+                                
+                                <div style="color: #191970; font-weight: bold; margin: 10px 0 5px 0;">Chương 3 - Vũ trụ:</div>
+                                <div>☄️ Thiên thạch: Quay và cứng</div>
+                                <div>🛸 UFO: Tia hút</div>
+                                <div>🛰️ Vệ tinh: Sóng nhiễu</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Cột phải: Powerups và lịch sử -->
+                    <div>
+                        <div style="background: rgba(255,255,255,0.1); border-radius: 10px; padding: 15px; margin-bottom: 15px;">
+                            <h3 style="color: #9B59B6; margin: 0 0 10px 0;">⚡ Danh sách Powerups</h3>
+                            <div style="font-size: 11px; line-height: 1.3; color: #ddd; max-height: 200px; overflow-y: auto;">
+                                <div style="color: #FF4444; font-weight: bold;">🗡️ Chiến Thần (Tấn công):</div>
+                                <div>• Hỏa Lực: Bắn nhanh hơn 50%</div>
+                                <div>• Song Đạn: Bắn 2 đạn cùng lúc</div>
+                                <div>• Xuyên Thấu: Đạn xuyên qua nhiều quái</div>
+                                <div>• Nổ Tung: Đạn có sát thương AOE</div>
+                                <div>• Tự Dẫn: Đạn tự động tìm mục tiêu</div>
+                                
+                                <div style="color: #4ECDC4; font-weight: bold; margin-top: 8px;">🛡️ Giáp Sắt (Phòng thủ):</div>
+                                <div>• Khiên Năng: Khiên hấp thụ 3 sát thương</div>
+                                <div>• Áo Giáp: Giảm 50% sát thương nhận</div>
+                                <div>• Sửa Chữa: Tự động hồi 1 HP khi dưới 50%</div>
+                                <div>• Lực Trường: Miễn nhiệm sát thương 5 giây</div>
+                                <div>• Tái Sinh: Hồi 1 HP mỗi 30 giây</div>
+                                
+                                <div style="color: #F39C12; font-weight: bold; margin-top: 8px;">⚡ Tốc Độ:</div>
+                                <div>• Đuôi Lửa: Tốc độ di chuyển +100%</div>
+                                <div>• Phản Xạ: Thời gian phản ứng nhanh hơn</div>
+                                <div>• Lướt Qua: Có thể dash qua quái</div>
+                                <div>• Giãn Thời: Làm chậm thời gian 20%</div>
+                                <div>• Siêu Tăng: Di chuyển không giới hạn</div>
+                                
+                                <div style="color: #3498DB; font-weight: bold; margin-top: 8px;">🔧 Hỗ Trợ:</div>
+                                <div>• Nam Châm: Thu hút câu hỏi từ xa</div>
+                                <div>• Đóng Băng: Dừng thời gian 10 giây</div>
+                                <div>• Radar: Hiển thị vị trí quái sắp xuất hiện</div>
+                                <div>• Tự Lái: Tự động tránh quái 15 giây</div>
+                                <div>• Quét Năng: Xem trước 3 powerup tiếp theo</div>
+                                
+                                <div style="color: #2ECC71; font-weight: bold; margin-top: 8px;">💰 Tiết Kiệm:</div>
+                                <div>• Nhân Bội: Điểm số x2</div>
+                                <div>• Thưởng Thêm: +50% điểm từ câu hỏi đúng</div>
+                                <div>• Giảm Giờ: Giảm 20 giây timer</div>
+                                <div>• Chuyên Gia: Cần ít câu hỏi hơn để qua màn</div>
+                                <div>• Tái Chế: Có cơ hội nhận lại powerup đã dùng</div>
+                                
+                                <div style="color: #8E44AD; font-weight: bold; margin-top: 8px;">🌌 Hư Vô (Đặc biệt):</div>
+                                <div>• Phượng Hoàng: Hồi sinh 1 lần khi chết</div>
+                                <div>• Lượng Tử: Teleport đến vị trí an toàn</div>
+                                <div>• Thực Tại: Hoán đổi HP với số câu hỏi còn lại</div>
+                                <div>• Xác Suất: Tăng 30% cơ hội powerup tốt</div>
+                                <div>• Nghịch Lý: Kích hoạt tất cả powerup cùng lúc 10s</div>
+                            </div>
+                        </div>
+                        
+                        <div style="background: rgba(255,255,255,0.1); border-radius: 10px; padding: 15px;">
+                            <h3 style="color: #E67E22; margin: 0 0 10px 0;">📈 Lịch sử chơi</h3>
+                            <div id="historyListMenu" style="font-size: 12px; max-height: 150px; overflow-y: auto; color: #ddd;">
+                                <div style="color: #999; font-style: italic; text-align: center;">Chưa có lịch sử</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div style="text-align: center; margin-top: 20px;">
+                    <button onclick="closeEscMenu()" style="background: linear-gradient(45deg, #FFD700, #FFA500); color: #000; border: none; padding: 10px 20px; border-radius: 8px; font-weight: bold; cursor: pointer; font-size: 14px;">🎮 QUAY LẠI GAME</button>
+                </div>
+            </div>
+        </div>
+
         <div id="quizModal">
             <h3 id="quizQuestion"></h3>
             <div id="quizOptions"></div>
@@ -280,13 +424,13 @@
         </div>
         
         <div id="startScreen">
-            <h1>🚁 TANK QUIZ RUNNER 🚁</h1>
-            <p>Điều khiển xe tăng qua 3 chương với các câu hỏi quiz!</p>
+            <h1>✈️ AIRPLANE QUIZ ADVENTURE ✈️</h1>
+            <p>Lái máy bay chiến đấu qua 3 chương với hệ thống powerup đặc biệt!</p>
             <p>• Sử dụng A/D hoặc ← → để di chuyển</p>
             <p>• Space để bắn (khi có buff)</p>
-            <p>• Tránh dơi, thu thập dấu ? để trả lời quiz</p>
-            <p>• Đánh bại 3 boss để hoàn thành game!</p>
-            <button id="startButton">BẮT ĐẦU CHƠI</button>
+            <p>• Tránh dơi, thu thập dấu ? để chọn powerup</p>
+            <p>• Chọn 1 trong 3 powerup mỗi lần - combo để có siêu buff!</p>
+            <button id="startButton">BẮT ĐẦU PHIÊU LƯU</button>
         </div>
     </div>
 
