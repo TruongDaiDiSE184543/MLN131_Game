@@ -407,12 +407,19 @@ document.addEventListener('keydown', (e) => {
     }
 });
 
-// Start button event
-document.getElementById('startBtn').addEventListener('click', () => {
-    gameState = 'playing';
+// Initialize when DOM is ready
+document.addEventListener('DOMContentLoaded', () => {
+    // Start button event
+    const startBtn = document.getElementById('startBtn');
+    if (startBtn) {
+        startBtn.addEventListener('click', () => {
+            gameState = 'playing';
+            initGame();
+            requestAnimationFrame(gameLoop);
+        });
+    }
+    
+    // Initialize game
     initGame();
     requestAnimationFrame(gameLoop);
 });
-
-// Initialize
-initGame();
