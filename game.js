@@ -1319,8 +1319,162 @@ class Boss {
 // ESC Menu functions
 let escMenuOpen = false;
 
+// Game initialization
+function initGame() {
+    airplane = new Airplane();
+    enemies = [];
+    bullets = [];
+    questionMarks = [];
+    boss = null;
+    
+    health = 3;
+    questionsAnswered = 0;
+    currentQuestionIndex = 0;
+    isBossFight = false;
+    canShoot = false;
+    hasShield = false;
+    activePowerups = [];
+    isSelectingPowerup = false;
+    
+    gameTime = 0;
+    chapterStartTime = Date.now();
+    
+    updateUI();
+}
+
+// Main game loop
+function gameLoop(currentTime) {
+    if (gameState === 'playing') {
+        if (lastTime === 0) lastTime = currentTime;
+        const deltaTime = currentTime - lastTime;
+        lastTime = currentTime;
+        
+        // Update game timer
+        gameTime = (currentTime - chapterStartTime) / 1000;
+        updateTimer();
+        
+        // Update game objects
+        if (airplane) airplane.update();
+        
+        enemies.forEach(enemy => enemy.update());
+        bullets.forEach(bullet => bullet.update());
+        questionMarks.forEach(qmark => qmark.update());
+        
+        if (boss) {
+            boss.update();
+        }
+        
+        // Collision detection
+        checkCollisions();
+        
+        // Clean up off-screen objects
+        enemies = enemies.filter(enemy => !enemy.isOffScreen());
+        bullets = bullets.filter(bullet => !bullet.isOffScreen());
+        questionMarks = questionMarks.filter(qmark => !qmark.isOffScreen());
+        
+        // Spawn objects
+        spawnObjects();
+        
+        // Clear and draw
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        drawBackground();
+        
+        // Draw game objects
+        if (airplane) airplane.draw();
+        enemies.forEach(enemy => enemy.draw());
+        bullets.forEach(bullet => bullet.draw());
+        questionMarks.forEach(qmark => qmark.draw());
+        
+        if (boss) {
+            boss.draw();
+        }
+        
+        // Check win/loss conditions
+        checkGameConditions();
+    }
+    
+    requestAnimationFrame(gameLoop);
+}
+
+// ESC Menu functions
+let escMenuOpen = false;
+
 function openEscMenu() {
-    if (gameState === 'quiz' || isSelectingPowerup) return; // Don't open during quiz/powerup selection
+    if (gameState === 'quiz' || isSelectingPowerup) return;
+    
+    escMenuOpen = true;
+    document.getElementById('escMenu').style.display = 'flex';
+    updateHistoryInMenu();
+    
+    if (gameState === 'playing') {
+        gameState = 'paused';
+    }
+}
+
+function closeEscMenu() {
+    escMenuOpen = false;
+    document.getElementById('escMenu').style.display = 'none';
+    
+    if (gameState === 'paused') {
+        gameState = 'playing';
+    }
+}
+
+function updateHistoryInMenu() {
+    const historyListMenu = document.getElementById('historyListMenu');
+    if (gameHistory.length === 0) {
+        historyListMenu.innerHTML = '<div style="color: #999; font-style: italic; text-align: center;">Chưa có lịch sử</div>';
+        return;
+    }
+    
+    historyListMenu.innerHTML = gameHistory.map(entry => {
+        const chapterText = entry.chapter === 4 ? 'Hoàn thành' : `Chương ${entry.chapter}`;
+        const resultColor = entry.chapter === 4 ? '#4CAF50' : '#FF9800';
+        return `
+            <div style="background: rgba(255,255,255,0.05); border-left: 3px solid ${resultColor}; padding: 8px; margin-bottom: 5px; border-radius: 5px;">
+                <div style="color: ${resultColor}; font-weight: bold; font-size: 11px;">${chapterText}</div>
+                <div style="font-size: 10px; color: #bbb;">⏱️ ${entry.time} | ❤️ ${entry.health} HP</div>
+            </div>
+        `;
+    }).join('');
+}
+
+// Event listeners
+document.addEventListener('keydown', (e) => {
+    if (escMenuOpen) {
+        if (e.key === 'Escape') {
+            closeEscMenu();
+        }
+        return;
+    }
+    
+    if (gameState === 'playing') {
+        if (e.key === 'Escape') {
+            openEscMenu();
+        } else if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') {
+            if (airplane.lane > 0) {
+                airplane.moveTo(airplane.lane - 1);
+            }
+        } else if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') {
+            if (airplane.lane < 2) {
+                airplane.moveTo(airplane.lane + 1);
+            }
+        } else if (e.key === ' ') {
+            e.preventDefault();
+            airplane.shoot();
+        }
+    }
+});
+
+// Start button event
+document.getElementById('startBtn').addEventListener('click', () => {
+    gameState = 'playing';
+    initGame();
+    requestAnimationFrame(gameLoop);
+});
+
+// Initialize
+initGame()werup) return; // Don't open during quiz/powerup selection
     
     escMenuOpen = true;
     document.getElementById('escMenu').style.display = 'flex';
@@ -2411,6 +2565,127 @@ document.addEventListener('keydown', (e) => {
         }
     }
 });
+
+// Missing core functions
+let lastTime = 0;
+
+function updateTimer() {
+    const minutes = Math.floor(gameTime / 60);
+    const seconds = Math.floor(gameTime % 60);
+    document.getElementById('timer').textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+}
+
+function updateUI() {
+    document.getElementById('chapter').textContent = currentChapter;
+    const heartsElement = document.getElementById('hearts');
+    heartsElement.innerHTML = '❤️'.repeat(health);
+    updatePowerupsDisplay();
+}
+
+function updatePowerupsDisplay() {
+    const container = document.getElementById('powerupContainer');
+    if (activePowerups.length === 0) {
+        container.innerHTML = '<div id="noPowerups" style="color: #999; font-style: italic; text-align: center;">Chưa có powerup nào</div>';
+    } else {
+        container.innerHTML = activePowerups.map(powerup => `
+            <div style="background: rgba(255,255,255,0.1); border-radius: 5px; padding: 5px; margin-bottom: 5px; border-left: 3px solid #FFD700;">
+                <div style="font-weight: bold; font-size: 11px; color: #FFD700;">${powerup.name}</div>
+                <div style="font-size: 10px; color: #ddd;">${powerup.desc}</div>
+            </div>
+        `).join('');
+    }
+}
+
+function drawBackground() {
+    const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
+    if (currentChapter === 1) {
+        gradient.addColorStop(0, '#87CEEB');
+        gradient.addColorStop(1, '#4682B4');
+    } else if (currentChapter === 2) {
+        gradient.addColorStop(0, '#006994');
+        gradient.addColorStop(1, '#002850');
+    } else {
+        gradient.addColorStop(0, '#0F0F23');
+        gradient.addColorStop(1, '#000');
+    }
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+}
+
+function spawnObjects() {
+    if (Math.random() < 0.02) {
+        const lane = Math.floor(Math.random() * 3);
+        enemies.push(new Bat(lane));
+    }
+    if (Math.random() < 0.01) {
+        const lane = Math.floor(Math.random() * 3);
+        questionMarks.push(new QuestionMark(lane));
+    }
+}
+
+function checkCollisions() {
+    for (let i = bullets.length - 1; i >= 0; i--) {
+        for (let j = enemies.length - 1; j >= 0; j--) {
+            if (isColliding(bullets[i], enemies[j])) {
+                enemies[j].hp--;
+                bullets.splice(i, 1);
+                if (enemies[j].hp <= 0) {
+                    enemies.splice(j, 1);
+                }
+                break;
+            }
+        }
+    }
+    
+    for (let i = enemies.length - 1; i >= 0; i--) {
+        if (isColliding(airplane, enemies[i])) {
+            if (!hasShield) {
+                health--;
+                updateUI();
+                if (health <= 0) {
+                    gameState = 'gameOver';
+                }
+            }
+            enemies.splice(i, 1);
+        }
+    }
+    
+    for (let i = questionMarks.length - 1; i >= 0; i--) {
+        if (isColliding(airplane, questionMarks[i])) {
+            showQuizQuestion();
+            questionMarks.splice(i, 1);
+        }
+    }
+}
+
+function isColliding(obj1, obj2) {
+    return obj1.x < obj2.x + obj2.width &&
+           obj1.x + obj1.width > obj2.x &&
+           obj1.y < obj2.y + obj2.height &&
+           obj1.y + obj1.height > obj2.y;
+}
+
+function showQuizQuestion() {
+    gameState = 'quiz';
+    setTimeout(() => {
+        questionsAnswered++;
+        canShoot = true;
+        gameState = 'playing';
+        updateUI();
+    }, 1000);
+}
+
+function checkGameConditions() {
+    if (gameTime > 60) {
+        currentChapter++;
+        gameTime = 0;
+        chapterStartTime = Date.now();
+        if (currentChapter > 3) {
+            gameState = 'gameOver';
+        }
+        updateUI();
+    }
+}
 
 // Initialize
 initGame();
