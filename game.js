@@ -1396,9 +1396,6 @@ function gameLoop(currentTime) {
     requestAnimationFrame(gameLoop);
 }
 
-// ESC Menu functions
-let escMenuOpen = false;
-
 function openEscMenu() {
     if (gameState === 'quiz' || isSelectingPowerup) return;
     
