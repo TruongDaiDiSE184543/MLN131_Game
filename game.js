@@ -201,6 +201,133 @@ let isBossFight = false;
 let lastQuestionTime = 0;
 let questionCooldown = 3000; // 3 seconds between questions
 
+// New powerup system
+let activePowerups = new Set();
+let powerupHistory = []; // Track used powerups to avoid duplication
+let totalGameTime = 0; // Track total time across all chapters
+let chapterTimes = [0, 0, 0]; // Track individual chapter times
+
+// New enemy types and their introductions
+let enemyIntroduced = {
+    bat: false,
+    ghost: false,
+    spider: false,
+    demon: false,
+    skull: false,
+    tentacle: false
+};
+
+// Chapter-specific enemy data
+const chapterEnemies = {
+    1: ['bat', 'ghost'], // Chapter 1 enemies
+    2: ['spider', 'demon'], // Chapter 2 enemies  
+    3: ['skull', 'tentacle'] // Chapter 3 enemies
+};
+
+// Enemy info for introductions
+const enemyInfo = {
+    bat: {
+        name: 'Dơi Cổ Điển',
+        skills: 'Bay thẳng, tốc độ vừa phải'
+    },
+    ghost: {
+        name: 'Hồn Ma Phiêu Lãng', 
+        skills: 'Ẩn hiện không định, khó dự đoán'
+    },
+    spider: {
+        name: 'Nhện Độc Tốc Hành',
+        skills: 'Di chuyển rất nhanh, khó né tránh'
+    },
+    demon: {
+        name: 'Ác Quỷ Teleport',
+        skills: 'Dịch chuyển tức thời giữa các lane'
+    },
+    skull: {
+        name: 'Đầu Lâu Săn Mồi',
+        skills: 'Tự động săn theo helicopter'
+    },
+    tentacle: {
+        name: 'Xúc Tu Khổng Lồ',
+        skills: 'Lướt ngang màn hình, phải nhảy qua'
+    }
+};
+
+// Enhanced powerup system
+const allPowerups = [
+    {
+        id: 'shoot',
+        name: 'Súng Máy',
+        icon: '🔫',
+        description: 'Có thể bắn để tiêu diệt quái vật'
+    },
+    {
+        id: 'heal1',
+        name: 'Hồi Máu Nhỏ',
+        icon: '❤️',
+        description: 'Hồi phục 1 máu'
+    },
+    {
+        id: 'heal3',
+        name: 'Hồi Máu Lớn',
+        icon: '💖',
+        description: 'Hồi phục 3 máu'
+    },
+    {
+        id: 'timeReduce',
+        name: 'Giảm Thời Gian',
+        icon: '⏱️',
+        description: 'Giảm 10 giây'
+    },
+    {
+        id: 'shield',
+        name: 'Khiên Bảo Vệ',
+        icon: '🛡️',
+        description: 'Miễn nhiễm một lần sát thương'
+    },
+    {
+        id: 'speed',
+        name: 'Tăng Tốc',
+        icon: '💨',
+        description: 'Tăng tốc độ di chuyển'
+    },
+    {
+        id: 'slowEnemy',
+        name: 'Làm Chậm Quái',
+        icon: '🐌',
+        description: 'Quái vật di chuyển chậm lại'
+    },
+    {
+        id: 'autoShoot',
+        name: 'Bắn Tự Động',
+        icon: '🎯',
+        description: 'Tự động bắn liên tục'
+    },
+    {
+        id: 'doubleScore',
+        name: 'Điểm Kép',
+        icon: '✨',
+        description: 'Thời gian trôi chậm hơn'
+    },
+    {
+        id: 'magnet',
+        name: 'Nam Châm',
+        icon: '🧲',
+        description: 'Thu hút dấu ? từ xa'
+    },
+    {
+        id: 'invisible',
+        name: 'Tàng Hình',
+        icon: '👻',
+        description: 'Tạm thời vô hình với quái vật'
+    },
+    {
+        id: 'freeze',
+        name: 'Đóng Băng',
+        icon: '❄️',
+        description: 'Dừng tất cả quái vật trong 5 giây'
+    }
+];
+
 // Game classes
 class Helicopter {
     constructor() {
@@ -325,18 +452,21 @@ class Helicopter {
 
 class Bat {
     constructor(lane) {
+        this.type = 'bat';
         this.lane = lane;
         const lanePositions = [canvas.width * 0.25, canvas.width * 0.5, canvas.width * 0.75];
         this.x = lanePositions[lane];
         this.y = -30;
         this.width = 30;
         this.height = 20;
-        this.speed = 3;
+        this.speed = 3 + (currentChapter - 1) * 0.5; // Increase speed by chapter
         this.wingFlap = 0;
     }
 
     update() {
-        this.y += this.speed;
+        // Apply slow effect if active
+        const effectiveSpeed = activePowerups.has('slowEnemy') ? this.speed * 0.5 : this.speed;
+        this.y += effectiveSpeed;
         this.wingFlap += 0.3;
     }
 
@@ -434,6 +564,400 @@ class Bat {
 
     isOffScreen() {
         return this.y > canvas.height + 50;
+    }
+}
+
+class Ghost {
+    constructor(lane) {
+        this.type = 'ghost';
+        this.lane = lane;
+        const lanePositions = [canvas.width * 0.25, canvas.width * 0.5, canvas.width * 0.75];
+        this.x = lanePositions[lane];
+        this.y = -30;
+        this.width = 35;
+        this.height = 25;
+        this.speed = 2.5 + (currentChapter - 1) * 0.5;
+        this.phase = 0;
+        this.isVisible = true;
+        this.visibilityTimer = 0;
+        this.float = 0;
+    }
+
+    update() {
+        const effectiveSpeed = activePowerups.has('slowEnemy') ? this.speed * 0.5 : this.speed;
+        this.y += effectiveSpeed;
+        this.phase += 0.15;
+        this.float += 0.08;
+        
+        // Visibility mechanic - appears and disappears
+        this.visibilityTimer++;
+        if (this.visibilityTimer > 120) { // 2 seconds at 60fps
+            this.isVisible = !this.isVisible;
+            this.visibilityTimer = 0;
+        }
+    }
+
+    draw() {
+        if (!this.isVisible) return; // Don't draw when invisible
+        
+        const floatOffset = Math.sin(this.float) * 3;
+        const phaseAlpha = 0.7 + Math.sin(this.phase) * 0.3;
+        
+        // Ghost body with transparency
+        ctx.globalAlpha = phaseAlpha;
+        ctx.fillStyle = '#e6e6fa';
+        ctx.beginPath();
+        ctx.ellipse(this.x, this.y + floatOffset, this.width/2, this.height/2, 0, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // Ghost tail (wavy bottom)
+        ctx.fillStyle = '#d8bfd8';
+        for (let i = 0; i < 5; i++) {
+            const waveX = this.x - this.width/2 + (i * this.width/4);
+            const waveY = this.y + this.height/2 + floatOffset + Math.sin(this.phase + i) * 3;
+            ctx.beginPath();
+            ctx.arc(waveX, waveY, 4, 0, Math.PI * 2);
+            ctx.fill();
+        }
+        
+        // Glowing eyes
+        ctx.shadowColor = '#ff0080';
+        ctx.shadowBlur = 8;
+        ctx.fillStyle = '#ff0080';
+        ctx.beginPath();
+        ctx.arc(this.x - 8, this.y - 5 + floatOffset, 3, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(this.x + 8, this.y - 5 + floatOffset, 3, 0, Math.PI * 2);
+        ctx.fill();
+        
+        ctx.shadowBlur = 0;
+        ctx.globalAlpha = 1;
+    }
+
+    isOffScreen() {
+        return this.y > canvas.height + 50;
+    }
+}
+
+class Spider {
+    constructor(lane) {
+        this.type = 'spider';
+        this.lane = lane;
+        const lanePositions = [canvas.width * 0.25, canvas.width * 0.5, canvas.width * 0.75];
+        this.x = lanePositions[lane];
+        this.y = -30;
+        this.width = 28;
+        this.height = 22;
+        this.speed = 4.5 + (currentChapter - 1) * 0.7; // Very fast
+        this.legAnimation = 0;
+        this.zigzag = 0;
+    }
+
+    update() {
+        const effectiveSpeed = activePowerups.has('slowEnemy') ? this.speed * 0.5 : this.speed;
+        this.y += effectiveSpeed;
+        this.legAnimation += 0.4;
+        this.zigzag += 0.2;
+        
+        // Zigzag movement
+        this.x += Math.sin(this.zigzag) * 2;
+    }
+
+    draw() {
+        const legOffset = Math.sin(this.legAnimation) * 2;
+        
+        // Spider body
+        ctx.fillStyle = '#8b0000';
+        ctx.beginPath();
+        ctx.ellipse(this.x, this.y, this.width/2, this.height/2, 0, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // Spider legs (8 legs)
+        ctx.strokeStyle = '#654321';
+        ctx.lineWidth = 2;
+        for (let i = 0; i < 4; i++) {
+            const angle = (i * Math.PI / 2) + legOffset * 0.1;
+            const legLength = 15;
+            
+            // Left side legs
+            ctx.beginPath();
+            ctx.moveTo(this.x - this.width/4, this.y);
+            ctx.lineTo(this.x - this.width/4 - Math.cos(angle) * legLength, 
+                      this.y + Math.sin(angle) * legLength);
+            ctx.stroke();
+            
+            // Right side legs
+            ctx.beginPath();
+            ctx.moveTo(this.x + this.width/4, this.y);
+            ctx.lineTo(this.x + this.width/4 + Math.cos(angle) * legLength, 
+                      this.y + Math.sin(angle) * legLength);
+            ctx.stroke();
+        }
+        
+        // Eyes
+        ctx.fillStyle = '#ff0000';
+        for (let i = 0; i < 4; i++) {
+            const eyeX = this.x - 6 + (i % 2) * 12;
+            const eyeY = this.y - 5 + Math.floor(i / 2) * 6;
+            ctx.beginPath();
+            ctx.arc(eyeX, eyeY, 1.5, 0, Math.PI * 2);
+            ctx.fill();
+        }
+    }
+
+    isOffScreen() {
+        return this.y > canvas.height + 50;
+    }
+}
+
+class Demon {
+    constructor(lane) {
+        this.type = 'demon';
+        this.lane = lane;
+        const lanePositions = [canvas.width * 0.25, canvas.width * 0.5, canvas.width * 0.75];
+        this.x = lanePositions[lane];
+        this.y = -30;
+        this.width = 32;
+        this.height = 28;
+        this.speed = 3 + (currentChapter - 1) * 0.5;
+        this.teleportTimer = 0;
+        this.flame = 0;
+        this.isVisible = true;
+        this.teleportCooldown = 180; // 3 seconds
+    }
+
+    update() {
+        const effectiveSpeed = activePowerups.has('slowEnemy') ? this.speed * 0.5 : this.speed;
+        this.y += effectiveSpeed;
+        this.flame += 0.3;
+        this.teleportTimer++;
+        
+        // Teleport mechanic
+        if (this.teleportTimer >= this.teleportCooldown) {
+            this.teleport();
+            this.teleportTimer = 0;
+        }
+    }
+
+    teleport() {
+        // Disappear briefly
+        this.isVisible = false;
+        setTimeout(() => {
+            // Teleport to random lane
+            const newLane = Math.floor(Math.random() * 3);
+            const lanePositions = [canvas.width * 0.25, canvas.width * 0.5, canvas.width * 0.75];
+            this.x = lanePositions[newLane];
+            this.lane = newLane;
+            this.isVisible = true;
+        }, 300);
+    }
+
+    draw() {
+        if (!this.isVisible) {
+            // Draw teleport effect
+            ctx.fillStyle = 'rgba(255, 0, 0, 0.3)';
+            ctx.beginPath();
+            ctx.arc(this.x, this.y, 20, 0, Math.PI * 2);
+            ctx.fill();
+            return;
+        }
+        
+        const flameHeight = 3 + Math.sin(this.flame) * 2;
+        
+        // Demon body
+        ctx.fillStyle = '#8b0000';
+        ctx.fillRect(this.x - this.width/2, this.y - this.height/2, this.width, this.height);
+        
+        // Horns
+        ctx.fillStyle = '#654321';
+        ctx.beginPath();
+        ctx.moveTo(this.x - 8, this.y - this.height/2);
+        ctx.lineTo(this.x - 12, this.y - this.height/2 - 8);
+        ctx.lineTo(this.x - 4, this.y - this.height/2 - 6);
+        ctx.fill();
+        
+        ctx.beginPath();
+        ctx.moveTo(this.x + 8, this.y - this.height/2);
+        ctx.lineTo(this.x + 12, this.y - this.height/2 - 8);
+        ctx.lineTo(this.x + 4, this.y - this.height/2 - 6);
+        ctx.fill();
+        
+        // Flaming eyes
+        ctx.shadowColor = '#ff4500';
+        ctx.shadowBlur = 8;
+        ctx.fillStyle = '#ff4500';
+        ctx.beginPath();
+        ctx.arc(this.x - 6, this.y - 5, 3, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(this.x + 6, this.y - 5, 3, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // Flame aura
+        ctx.fillStyle = `rgba(255, 69, 0, 0.4)`;
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.width/2 + flameHeight, 0, Math.PI * 2);
+        ctx.fill();
+        
+        ctx.shadowBlur = 0;
+    }
+
+    isOffScreen() {
+        return this.y > canvas.height + 50;
+    }
+}
+
+class Skull {
+    constructor(lane) {
+        this.type = 'skull';
+        this.lane = lane;
+        const lanePositions = [canvas.width * 0.25, canvas.width * 0.5, canvas.width * 0.75];
+        this.x = lanePositions[lane];
+        this.y = -30;
+        this.width = 30;
+        this.height = 25;
+        this.speed = 2.5 + (currentChapter - 1) * 0.5;
+        this.targetX = this.x;
+        this.glow = 0;
+    }
+
+    update() {
+        const effectiveSpeed = activePowerups.has('slowEnemy') ? this.speed * 0.5 : this.speed;
+        this.y += effectiveSpeed;
+        this.glow += 0.1;
+        
+        // Home in on helicopter
+        if (helicopter) {
+            const dx = helicopter.x - this.x;
+            this.x += dx * 0.02; // Slowly move toward helicopter
+        }
+    }
+
+    draw() {
+        const glowIntensity = 0.5 + Math.sin(this.glow) * 0.5;
+        
+        // Skull body
+        ctx.fillStyle = '#f5f5dc';
+        ctx.beginPath();
+        ctx.ellipse(this.x, this.y, this.width/2, this.height/2, 0, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // Eye sockets
+        ctx.fillStyle = '#000';
+        ctx.beginPath();
+        ctx.arc(this.x - 6, this.y - 3, 4, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(this.x + 6, this.y - 3, 4, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // Glowing eyes
+        ctx.shadowColor = '#00ff00';
+        ctx.shadowBlur = 10;
+        ctx.fillStyle = `rgba(0, 255, 0, ${glowIntensity})`;
+        ctx.beginPath();
+        ctx.arc(this.x - 6, this.y - 3, 2, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(this.x + 6, this.y - 3, 2, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // Nasal cavity
+        ctx.fillStyle = '#000';
+        ctx.beginPath();
+        ctx.moveTo(this.x, this.y);
+        ctx.lineTo(this.x - 2, this.y + 4);
+        ctx.lineTo(this.x + 2, this.y + 4);
+        ctx.fill();
+        
+        // Jaw
+        ctx.strokeStyle = '#000';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(this.x, this.y + 8, 8, 0, Math.PI);
+        ctx.stroke();
+        
+        // Teeth
+        ctx.fillStyle = '#fff';
+        for (let i = -2; i <= 2; i++) {
+            ctx.fillRect(this.x + i * 3 - 1, this.y + 8, 2, 4);
+        }
+        
+        ctx.shadowBlur = 0;
+    }
+
+    isOffScreen() {
+        return this.y > canvas.height + 50;
+    }
+}
+
+class Tentacle {
+    constructor(lane) {
+        this.type = 'tentacle';
+        this.lane = lane;
+        this.x = -50; // Start from left
+        this.y = 200 + Math.random() * 200; // Random height
+        this.width = 80;
+        this.height = 30;
+        this.speed = 4 + (currentChapter - 1) * 0.5;
+        this.wave = 0;
+        this.segments = [];
+        
+        // Create tentacle segments
+        for (let i = 0; i < 8; i++) {
+            this.segments.push({
+                x: this.x - i * 10,
+                y: this.y,
+                size: 15 - i * 1.5
+            });
+        }
+    }
+
+    update() {
+        const effectiveSpeed = activePowerups.has('slowEnemy') ? this.speed * 0.5 : this.speed;
+        this.x += effectiveSpeed;
+        this.wave += 0.15;
+        
+        // Update segments with wave motion
+        for (let i = 0; i < this.segments.length; i++) {
+            this.segments[i].x = this.x - i * 10;
+            this.segments[i].y = this.y + Math.sin(this.wave + i * 0.3) * 15;
+        }
+    }
+
+    draw() {
+        // Draw tentacle segments
+        ctx.fillStyle = '#800080';
+        for (let i = this.segments.length - 1; i >= 0; i--) {
+            const segment = this.segments[i];
+            ctx.beginPath();
+            ctx.arc(segment.x, segment.y, segment.size, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Suckers
+            if (i % 2 === 0) {
+                ctx.fillStyle = '#ff69b4';
+                ctx.beginPath();
+                ctx.arc(segment.x, segment.y, segment.size * 0.4, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.fillStyle = '#800080';
+            }
+        }
+        
+        // Warning indicator when approaching
+        if (this.x < 50 && this.x > -100) {
+            ctx.fillStyle = 'rgba(255, 0, 0, 0.5)';
+            ctx.fillRect(0, this.y - 15, 50, 30);
+            ctx.fillStyle = '#fff';
+            ctx.font = 'bold 16px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText('!', 25, this.y + 5);
+        }
+    }
+
+    isOffScreen() {
+        return this.x > canvas.width + 100;
     }
 }
 
@@ -572,29 +1096,35 @@ class Boss {
 
     attack() {
         switch(this.chapter) {
-            case 1: // Summon 3 bats in one lane
+            case 1: // Summon chapter 1 enemies
                 const lane1 = Math.floor(Math.random() * 3);
+                const chap1Enemies = ['bat', 'ghost'];
                 for (let i = 0; i < 3; i++) {
                     setTimeout(() => {
-                        enemies.push(new Bat(lane1));
+                        const enemyType = chap1Enemies[Math.floor(Math.random() * chap1Enemies.length)];
+                        enemies.push(createEnemy(enemyType, lane1));
                     }, i * 200);
                 }
                 break;
                 
-            case 2: // Summon 2x2 bats in one lane
+            case 2: // Summon chapter 2 enemies with mixed types
                 const lane2 = Math.floor(Math.random() * 3);
+                const chap2Enemies = ['spider', 'demon'];
                 for (let i = 0; i < 2; i++) {
                     setTimeout(() => {
-                        enemies.push(new Bat(lane2));
-                        enemies.push(new Bat(lane2));
+                        const enemyType = chap2Enemies[Math.floor(Math.random() * chap2Enemies.length)];
+                        enemies.push(createEnemy(enemyType, lane2));
+                        enemies.push(createEnemy(enemyType, (lane2 + 1) % 3));
                     }, i * 300);
                 }
                 break;
                 
-            case 3: // Summon 3 bats across all lanes
+            case 3: // Summon chapter 3 enemies across all lanes
+                const chap3Enemies = ['skull', 'tentacle'];
                 for (let lane = 0; lane < 3; lane++) {
                     setTimeout(() => {
-                        enemies.push(new Bat(lane));
+                        const enemyType = chap3Enemies[Math.floor(Math.random() * chap3Enemies.length)];
+                        enemies.push(createEnemy(enemyType, lane));
                     }, lane * 150);
                 }
                 break;
@@ -689,6 +1219,147 @@ class Boss {
     }
 }
 
+// Enemy introduction system
+function introduceNewEnemy(enemyType) {
+    if (enemyIntroduced[enemyType]) return;
+    
+    enemyIntroduced[enemyType] = true;
+    const info = enemyInfo[enemyType];
+    
+    showPause(`🆕 Quái Mới Xuất Hiện!`, 
+        `${info.name}\n\nKỹ năng: ${info.skills}\n\nBấm SPACE để tiếp tục`, 
+        () => {
+            gameState = 'playing';
+        });
+}
+
+// Enhanced powerup system with no duplicates
+function giveSmartRandomBuff() {
+    // Get available powerups for current chapter (exclude used ones)
+    const chapterPowerups = allPowerups.filter(p => 
+        !powerupHistory.includes(p.id) || 
+        (p.id === 'heal1' && health < 3) || 
+        (p.id === 'heal3' && health < 3)
+    );
+    
+    if (chapterPowerups.length === 0) {
+        // If all used, reset for this chapter but keep some restrictions
+        powerupHistory = [];
+        return giveSmartRandomBuff();
+    }
+    
+    const powerup = chapterPowerups[Math.floor(Math.random() * chapterPowerups.length)];
+    powerupHistory.push(powerup.id);
+    
+    // Apply powerup effect
+    applyPowerup(powerup);
+}
+
+function applyPowerup(powerup) {
+    activePowerups.add(powerup.id);
+    
+    switch(powerup.id) {
+        case 'shoot':
+            canShoot = true;
+            showMessage(`${powerup.icon} ${powerup.name}!`, '#00ff00');
+            break;
+        case 'heal1':
+            if (health < 3) {
+                health++;
+                showMessage(`${powerup.icon} ${powerup.name}!`, '#ff69b4');
+            } else {
+                showMessage('❤️ Máu đã đầy!', '#ffff00');
+            }
+            break;
+        case 'heal3':
+            health = 3;
+            showMessage(`${powerup.icon} ${powerup.name}!`, '#ff1493');
+            break;
+        case 'timeReduce':
+            gameTime = Math.max(0, gameTime - 10);
+            showMessage(`${powerup.icon} ${powerup.name}!`, '#00bfff');
+            break;
+        case 'shield':
+            hasShield = true;
+            showMessage(`${powerup.icon} ${powerup.name}!`, '#ffd700');
+            break;
+        case 'speed':
+            helicopter.speed = 12;
+            showMessage(`${powerup.icon} ${powerup.name}!`, '#00ff88');
+            setTimeout(() => {
+                helicopter.speed = 8;
+                activePowerups.delete('speed');
+            }, 8000);
+            break;
+        case 'slowEnemy':
+            showMessage(`${powerup.icon} ${powerup.name}!`, '#9966ff');
+            setTimeout(() => {
+                activePowerups.delete('slowEnemy');
+            }, 10000);
+            break;
+        case 'autoShoot':
+            showMessage(`${powerup.icon} ${powerup.name}!`, '#ff6600');
+            const autoShootInterval = setInterval(() => {
+                if (activePowerups.has('autoShoot') && canShoot) {
+                    helicopter.shoot();
+                }
+            }, 500);
+            setTimeout(() => {
+                activePowerups.delete('autoShoot');
+                clearInterval(autoShootInterval);
+            }, 12000);
+            break;
+        case 'doubleScore':
+            showMessage(`${powerup.icon} ${powerup.name}!`, '#ffdd00');
+            setTimeout(() => {
+                activePowerups.delete('doubleScore');
+            }, 15000);
+            break;
+        case 'magnet':
+            showMessage(`${powerup.icon} ${powerup.name}!`, '#0099ff');
+            setTimeout(() => {
+                activePowerups.delete('magnet');
+            }, 8000);
+            break;
+        case 'invisible':
+            showMessage(`${powerup.icon} ${powerup.name}!`, '#aa88ff');
+            setTimeout(() => {
+                activePowerups.delete('invisible');
+            }, 6000);
+            break;
+        case 'freeze':
+            showMessage(`${powerup.icon} ${powerup.name}!`, '#00ffff');
+            setTimeout(() => {
+                activePowerups.delete('freeze');
+            }, 5000);
+            break;
+    }
+    updateUI();
+}
+
+// Enhanced enemy spawning with chapter-specific enemies
+function createEnemy(type, lane) {
+    // Introduce new enemy type if not seen before
+    introduceNewEnemy(type);
+    
+    switch(type) {
+        case 'bat':
+            return new Bat(lane);
+        case 'ghost':
+            return new Ghost(lane);
+        case 'spider':
+            return new Spider(lane);
+        case 'demon':
+            return new Demon(lane);
+        case 'skull':
+            return new Skull(lane);
+        case 'tentacle':
+            return new Tentacle(lane);
+        default:
+            return new Bat(lane);
+    }
+}
+
 // Game initialization
 function initGame() {
     helicopter = new Helicopter();
@@ -703,7 +1374,19 @@ function initGame() {
     currentQuestionIndex = 0;
     isBossFight = false;
     gameTime = 0;
+    totalGameTime = 0;
     chapterStartTime = Date.now();
+    activePowerups.clear();
+    powerupHistory = [];
+    
+    // Reset enemy introductions for new game
+    for (let enemy in enemyIntroduced) {
+        enemyIntroduced[enemy] = false;
+    }
+    
+    // Initialize chapter theme
+    updateChapterTheme();
+    
     initBackgroundParticles();
     updateUI();
     updateHistoryDisplay();
@@ -856,33 +1539,7 @@ function answerQuestion(selectedIndex) {
 }
 
 function giveRandomBuff() {
-    const buffs = [
-        () => { canShoot = true; showMessage('Buff: Có thể bắn!', '#00ff00'); },
-        () => { 
-            if (health < 3) {
-                health++; 
-                showMessage('Buff: Hồi 1 máu!', '#ff69b4');
-            } else {
-                showMessage('Buff: Máu đã đầy!', '#ffff00');
-            }
-        },
-        () => { 
-            health = Math.min(3, health + 3); 
-            showMessage('Buff: Hồi 3 máu!', '#ff1493');
-        },
-        () => { 
-            gameTime = Math.max(0, gameTime - 10); 
-            showMessage('Buff: -10 giây!', '#00bfff');
-        },
-        () => { 
-            hasShield = true; 
-            showMessage('Buff: Khiên bảo vệ!', '#ffd700');
-        }
-    ];
-    
-    const randomBuff = buffs[Math.floor(Math.random() * buffs.length)];
-    randomBuff();
-    updateUI();
+    giveSmartRandomBuff(); // Use the new enhanced powerup system
 }
 
 function showMessage(text, color) {
@@ -944,8 +1601,17 @@ function checkCollisions() {
         height: helicopter.height
     };
     
-    // Check helicopter vs enemies
+    // Check helicopter vs enemies (skip if invisible)
     enemies.forEach((enemy, enemyIndex) => {
+        // Skip collision if invisible powerup is active
+        if (activePowerups.has('invisible')) return;
+        
+        // Skip collision for ghost enemies when they're invisible
+        if (enemy.type === 'ghost' && !enemy.isVisible) return;
+        
+        // Skip collision for demon enemies when they're teleporting
+        if (enemy.type === 'demon' && !enemy.isVisible) return;
+        
         const enemyRect = {
             x: enemy.x - enemy.width/2,
             y: enemy.y - enemy.height/2,
@@ -959,8 +1625,20 @@ function checkCollisions() {
         }
     });
     
-    // Check helicopter vs question marks
+    // Check helicopter vs question marks with magnet effect
     questionMarks.forEach((qm, qmIndex) => {
+        // Magnet effect - pull question marks toward helicopter
+        if (activePowerups.has('magnet')) {
+            const dx = helicopter.x - qm.x;
+            const dy = helicopter.y - qm.y;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+            
+            if (distance < 100) { // Magnet range
+                qm.x += dx * 0.1;
+                qm.y += dy * 0.1;
+            }
+        }
+        
         const qmRect = {
             x: qm.x - qm.width/2,
             y: qm.y - qm.height/2,
@@ -1122,13 +1800,21 @@ function restartFromChapter(chapter) {
 }
 
 function completeChapter() {
-    const chapterTime = Math.floor((Date.now() - chapterStartTime) / 1000);
+    const chapterTime = Math.floor(gameTime);
+    chapterTimes[currentChapter - 1] = chapterTime;
+    totalGameTime += chapterTime;
     
     // Save success to history
     saveGameHistory(currentChapter, true, chapterTime);
     
     if (currentChapter < 3) {
-        // Show chapter completion pause
+        // Show chapter completion pause with updated visuals per chapter
+        const chapterThemes = [
+            { bg: 'linear-gradient(135deg, #ff9a9e, #fecfef)', color: '#8b0000' },
+            { bg: 'linear-gradient(135deg, #a8edea, #fed6e3)', color: '#0f4c75' },
+            { bg: 'linear-gradient(135deg, #ffecd2, #fcb69f)', color: '#5d4037' }
+        ];
+        
         showPause('🎉 Chương Hoàn Thành!', 
             `Chương ${currentChapter} hoàn thành!\nThời gian: ${Math.floor(chapterTime/60)}:${(chapterTime%60).toString().padStart(2, '0')}\nChuẩn bị chương tiếp theo...`, 
             () => {
@@ -1137,10 +1823,12 @@ function completeChapter() {
                 questionsAnswered = 0;
                 currentQuestionIndex = 0;
                 chapterStartTime = Date.now();
-                gameTime = 0; // Reset timer
+                gameTime = 0; // Reset chapter timer
                 health = 3; // Reset health
                 hasShield = false; // Reset buffs
                 canShoot = false;
+                activePowerups.clear(); // Clear all powerups
+                powerupHistory = []; // Reset powerup history for new chapter
                 isBossFight = false;
                 boss = null;
                 enemies = [];
@@ -1149,13 +1837,42 @@ function completeChapter() {
                 lastBatSpawn = 0;
                 lastQuestionSpawn = 0;
                 
+                // Change background theme for new chapter
+                updateChapterTheme();
+                
                 updateUI();
                 gameState = 'playing';
             });
     } else {
-        // Game completed - show victory trophy
-        const totalTime = Math.floor(gameTime);
-        showVictoryScreen(totalTime);
+        // Game completed - show victory trophy with total time
+        showVictoryScreen(totalGameTime);
+    }
+}
+
+// Add chapter theme system
+function updateChapterTheme() {
+    const themes = {
+        1: {
+            bg: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+            particleColor: '#ffffff'
+        },
+        2: {
+            bg: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)', 
+            particleColor: '#ffff00'
+        },
+        3: {
+            bg: 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)',
+            particleColor: '#ff6b6b'
+        }
+    };
+    
+    const theme = themes[currentChapter];
+    if (theme) {
+        canvas.style.background = theme.bg;
+        // Update particle system color if exists
+        if (window.backgroundParticles) {
+            window.backgroundParticles.forEach(p => p.color = theme.particleColor);
+        }
     }
 }
 
@@ -1229,16 +1946,20 @@ function spawnObjects() {
     
     const now = Date.now();
     
-    // Simple and reliable bat spawning
-    const batSpawnInterval = isBossFight ? 1800 : 2500; // Consistent intervals
-    if (now - lastBatSpawn > batSpawnInterval) {
+    // Enhanced enemy spawning with chapter-specific enemies
+    const enemySpawnInterval = isBossFight ? 1500 : (2200 - (currentChapter - 1) * 200); // Faster in later chapters
+    if (now - lastBatSpawn > enemySpawnInterval) {
+        const chapterEnemyTypes = chapterEnemies[currentChapter] || ['bat'];
+        const enemyType = chapterEnemyTypes[Math.floor(Math.random() * chapterEnemyTypes.length)];
         const lane = Math.floor(Math.random() * 3);
-        enemies.push(new Bat(lane));
+        
+        const newEnemy = createEnemy(enemyType, lane);
+        enemies.push(newEnemy);
         lastBatSpawn = now;
     }
     
-    // Simple and reliable question spawning
-    const questionSpawnInterval = isBossFight ? 3000 : 5000; // Regular intervals
+    // Enhanced question spawning with magnet effect
+    const questionSpawnInterval = isBossFight ? 2800 : 4500; // Regular intervals
     const maxQuestions = 5;
     
     // Always spawn questions if we haven't reached the limit
