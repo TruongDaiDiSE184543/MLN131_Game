@@ -196,6 +196,10 @@ let health = 3;
 let maxHealth = 3;
 let hasShield = false;
 let canShoot = false;
+let hasSkill = false;
+let skillType = 'none'; // 'dash', 'shoot', 'shield'
+let lastSkillUse = 0;
+let skillCooldown = 3000; // 3 seconds
 let questionsAnswered = 0;
 let currentQuestionIndex = 0;
 let isBossFight = false;
@@ -212,17 +216,20 @@ let chapterTimes = [0, 0, 0]; // Track individual chapter times
 let enemyIntroduced = {
     bat: false,
     ghost: false,
+    worm: false,
     spider: false,
     demon: false,
+    eye: false,
     skull: false,
-    tentacle: false
+    tentacle: false,
+    shadow: false
 };
 
 // Chapter-specific enemy data
 const chapterEnemies = {
-    1: ['bat', 'ghost'], // Chapter 1 enemies
-    2: ['bat', 'ghost', 'spider', 'demon'], // Chapter 2 enemies with all chapter 1 enemies
-    3: ['skull', 'tentacle'] // Chapter 3 enemies
+    1: ['bat', 'ghost', 'worm'], // Chapter 1 enemies
+    2: ['bat', 'ghost', 'worm', 'spider', 'demon', 'eye'], // Chapter 2 enemies with all previous enemies for balance
+    3: ['skull', 'tentacle', 'shadow'] // Chapter 3 enemies
 };
 
 // Enemy info for introductions
@@ -235,6 +242,10 @@ const enemyInfo = {
         name: 'Hồn Ma Phiêu Lãng', 
         skills: 'Ẩn hiện không định, khó dự đoán'
     },
+    worm: {
+        name: 'Sâu Đất Khoan Xuyên',
+        skills: 'Khoan từ dưới lên, tấn công bất ngờ'
+    },
     spider: {
         name: 'Nhện Độc Tốc Hành',
         skills: 'Di chuyển rất nhanh, khó né tránh'
@@ -243,6 +254,10 @@ const enemyInfo = {
         name: 'Ác Quỷ Teleport',
         skills: 'Dịch chuyển tức thời giữa các lane'
     },
+    eye: {
+        name: 'Con Mắt Giám Sát',
+        skills: 'Bay chậm nhưng bắn laser theo dõi'
+    },
     skull: {
         name: 'Đầu Lâu Săn Mồi',
         skills: 'Tự động săn theo helicopter'
@@ -250,6 +265,10 @@ const enemyInfo = {
     tentacle: {
         name: 'Xúc Tu Khổng Lồ',
         skills: 'Lướt ngang màn hình, phải nhảy qua'
+    },
+    shadow: {
+        name: 'Bóng Tối Hủy Diệt',
+        skills: 'Tăng tốc đột ngột và bám theo mục tiêu'
     }
 };
 
@@ -320,6 +339,30 @@ const allPowerups = [
         name: 'Đóng Băng',
         icon: '❄️',
         description: 'Dừng tất cả quái vật trong 5 giây'
+    },
+    {
+        id: 'clearAll',
+        name: 'Xóa Sổ',
+        icon: '💥',
+        description: 'Xóa tất cả quái vật trên màn hình'
+    },
+    {
+        id: 'skillDash',
+        name: 'Skill: Lướt Nhanh',
+        icon: '⚡',
+        description: 'Phím Alt: Lướt nhanh qua lane (tránh damage)'
+    },
+    {
+        id: 'skillShoot',
+        name: 'Skill: Laser Xuyên',
+        icon: '🔥',
+        description: 'Phím Alt: Bắn laser xuyên suốt màn hình'
+    },
+    {
+        id: 'skillShield',
+        name: 'Skill: Khiên Tức Thời',
+        icon: '🛡️',
+        description: 'Phím Alt: Tạo khiên bảo vệ 3 giây'
     }
 ];
 
@@ -635,6 +678,100 @@ class Ghost {
     }
 }
 
+class Worm {
+    constructor(lane) {
+        this.type = 'worm';
+        this.lane = lane;
+        const lanePositions = [canvas.width * 0.25, canvas.width * 0.5, canvas.width * 0.75];
+        this.x = lanePositions[lane];
+        this.y = canvas.height + 50; // Start from bottom
+        this.width = 25;
+        this.height = 40;
+        this.speed = 2 + (currentChapter - 1) * 0.3;
+        this.drillFrame = 0;
+        this.isEmerging = true;
+        this.emergeDist = 0;
+        this.maxEmerge = 80;
+    }
+
+    update() {
+        const effectiveSpeed = activePowerups.has('slowEnemy') ? this.speed * 0.5 : this.speed;
+        
+        if (this.isEmerging && this.emergeDist < this.maxEmerge) {
+            // Emerging from underground
+            this.y -= effectiveSpeed;
+            this.emergeDist += effectiveSpeed;
+        } else {
+            // Moving up normally
+            this.isEmerging = false;
+            this.y -= effectiveSpeed * 0.7; // Slower after emerging
+        }
+        
+        this.drillFrame += 0.4;
+    }
+
+    draw() {
+        const drillRotation = this.drillFrame;
+        
+        // Worm body segments
+        const segments = 6;
+        for (let i = 0; i < segments; i++) {
+            const segmentY = this.y + i * 6;
+            const segmentSize = this.width/2 - i * 2;
+            const segmentColor = `hsl(${30 + i * 10}, 70%, ${40 + i * 5}%)`;
+            
+            ctx.fillStyle = segmentColor;
+            ctx.beginPath();
+            ctx.arc(this.x, segmentY, Math.max(segmentSize, 3), 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Segment rings
+            ctx.strokeStyle = '#654321';
+            ctx.lineWidth = 1;
+            ctx.stroke();
+        }
+        
+        // Drill head with rotation
+        ctx.save();
+        ctx.translate(this.x, this.y);
+        ctx.rotate(drillRotation);
+        
+        // Drill tip
+        ctx.fillStyle = '#8b4513';
+        ctx.beginPath();
+        ctx.moveTo(0, -this.height/2);
+        ctx.lineTo(-8, 0);
+        ctx.lineTo(8, 0);
+        ctx.fill();
+        
+        // Drill spirals
+        ctx.strokeStyle = '#654321';
+        ctx.lineWidth = 2;
+        for (let i = 0; i < 3; i++) {
+            const angle = (drillRotation * 2 + i * Math.PI * 2/3);
+            ctx.beginPath();
+            ctx.arc(0, -5, 6, angle, angle + Math.PI/2);
+            ctx.stroke();
+        }
+        
+        ctx.restore();
+        
+        // Warning indicator when emerging
+        if (this.isEmerging) {
+            ctx.fillStyle = 'rgba(255, 165, 0, 0.7)';
+            ctx.fillRect(this.x - 15, canvas.height - 30, 30, 20);
+            ctx.fillStyle = '#fff';
+            ctx.font = 'bold 14px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText('⚠', this.x, canvas.height - 15);
+        }
+    }
+
+    isOffScreen() {
+        return this.y < -50;
+    }
+}
+
 class Spider {
     constructor(lane) {
         this.type = 'spider';
@@ -803,6 +940,127 @@ class Demon {
     }
 }
 
+class Eye {
+    constructor(lane) {
+        this.type = 'eye';
+        this.lane = lane;
+        const lanePositions = [canvas.width * 0.25, canvas.width * 0.5, canvas.width * 0.75];
+        this.x = lanePositions[lane];
+        this.y = -30;
+        this.width = 35;
+        this.height = 35;
+        this.speed = 1.5 + (currentChapter - 1) * 0.3; // Slow movement
+        this.blink = 0;
+        this.lastLaser = 0;
+        this.laserCooldown = 3000; // 3 seconds
+        this.pupilFollow = 0;
+        this.lasers = [];
+    }
+
+    update() {
+        const effectiveSpeed = activePowerups.has('slowEnemy') ? this.speed * 0.5 : this.speed;
+        this.y += effectiveSpeed;
+        this.blink += 0.1;
+        this.pupilFollow += 0.05;
+        
+        // Shoot laser periodically
+        if (Date.now() - this.lastLaser > this.laserCooldown && this.y > 50) {
+            this.shootLaser();
+            this.lastLaser = Date.now();
+        }
+        
+        // Update lasers
+        this.lasers.forEach((laser, index) => {
+            laser.y += 6; // Laser speed
+            if (laser.y > canvas.height + 50) {
+                this.lasers.splice(index, 1);
+            }
+        });
+    }
+
+    shootLaser() {
+        // Aim towards helicopter
+        if (helicopter) {
+            this.lasers.push({
+                x: this.x,
+                y: this.y + 15,
+                targetX: helicopter.x,
+                width: 4,
+                height: 15
+            });
+        }
+    }
+
+    draw() {
+        const blinkValue = Math.sin(this.blink) * 0.3 + 0.7;
+        
+        // Eye base (sclera)
+        ctx.fillStyle = '#f0f0f0';
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.width/2, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // Eye outline
+        ctx.strokeStyle = '#000';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        
+        // Iris
+        ctx.fillStyle = '#ff4500';
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.width/3, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // Pupil (follows helicopter)
+        let pupilX = this.x;
+        let pupilY = this.y;
+        if (helicopter) {
+            const dx = helicopter.x - this.x;
+            const dy = helicopter.y - this.y;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+            if (distance > 0) {
+                pupilX += (dx / distance) * 3;
+                pupilY += (dy / distance) * 3;
+            }
+        }
+        
+        ctx.fillStyle = '#000';
+        ctx.beginPath();
+        ctx.arc(pupilX, pupilY, this.width/6, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // Eye highlight
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+        ctx.beginPath();
+        ctx.arc(pupilX - 2, pupilY - 2, 3, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // Eyelids (blinking effect)
+        if (blinkValue < 0.9) {
+            ctx.fillStyle = '#ffaaaa';
+            ctx.beginPath();
+            ctx.ellipse(this.x, this.y - this.height/4, this.width/2, this.height/4 * (1 - blinkValue), 0, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.beginPath();
+            ctx.ellipse(this.x, this.y + this.height/4, this.width/2, this.height/4 * (1 - blinkValue), 0, 0, Math.PI * 2);
+            ctx.fill();
+        }
+        
+        // Draw lasers
+        this.lasers.forEach(laser => {
+            ctx.fillStyle = '#ff0000';
+            ctx.shadowColor = '#ff0000';
+            ctx.shadowBlur = 10;
+            ctx.fillRect(laser.x - laser.width/2, laser.y - laser.height/2, laser.width, laser.height);
+            ctx.shadowBlur = 0;
+        });
+    }
+
+    isOffScreen() {
+        return this.y > canvas.height + 50;
+    }
+}
+
 class Skull {
     constructor(lane) {
         this.type = 'skull';
@@ -953,6 +1211,136 @@ class Tentacle {
 
     isOffScreen() {
         return this.x > canvas.width + 100;
+    }
+}
+
+class Shadow {
+    constructor(lane) {
+        this.type = 'shadow';
+        this.lane = lane;
+        const lanePositions = [canvas.width * 0.25, canvas.width * 0.5, canvas.width * 0.75];
+        this.x = lanePositions[lane];
+        this.y = -30;
+        this.width = 35;
+        this.height = 30;
+        this.speed = 2 + (currentChapter - 1) * 0.5;
+        this.normalSpeed = this.speed;
+        this.dashSpeed = this.speed * 3;
+        this.isDashing = false;
+        this.dashTimer = 0;
+        this.dashCooldown = 0;
+        this.shadowPhase = 0;
+        this.targetX = this.x;
+    }
+
+    update() {
+        const baseSpeed = activePowerups.has('slowEnemy') ? this.normalSpeed * 0.5 : this.normalSpeed;
+        
+        // Dash behavior
+        this.dashCooldown--;
+        if (this.dashCooldown <= 0 && !this.isDashing && this.y > 100) {
+            this.isDashing = true;
+            this.dashTimer = 30; // 0.5 seconds at 60fps
+            this.dashCooldown = 180; // 3 seconds cooldown
+            
+            // Target helicopter position
+            if (helicopter) {
+                this.targetX = helicopter.x;
+            }
+        }
+        
+        if (this.isDashing) {
+            // Dash towards target
+            const effectiveSpeed = activePowerups.has('slowEnemy') ? this.dashSpeed * 0.5 : this.dashSpeed;
+            this.y += effectiveSpeed;
+            
+            // Move towards target X
+            const dx = this.targetX - this.x;
+            this.x += dx * 0.1;
+            
+            this.dashTimer--;
+            if (this.dashTimer <= 0) {
+                this.isDashing = false;
+            }
+        } else {
+            // Normal movement
+            this.y += baseSpeed;
+        }
+        
+        this.shadowPhase += 0.15;
+    }
+
+    draw() {
+        const phaseAlpha = this.isDashing ? 
+            0.9 + Math.sin(this.shadowPhase * 4) * 0.1 : 
+            0.6 + Math.sin(this.shadowPhase) * 0.2;
+        
+        // Shadow body with transparency
+        ctx.globalAlpha = phaseAlpha;
+        
+        if (this.isDashing) {
+            // Dash effect - elongated shadow
+            ctx.fillStyle = '#4a0080';
+            ctx.beginPath();
+            ctx.ellipse(this.x, this.y, this.width/2, this.height * 1.5, 0, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Dash particles
+            for (let i = 0; i < 5; i++) {
+                const particleX = this.x + (Math.random() - 0.5) * 20;
+                const particleY = this.y + (Math.random() - 0.5) * 20;
+                ctx.fillStyle = '#8a00ff';
+                ctx.beginPath();
+                ctx.arc(particleX, particleY, 2, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        } else {
+            // Normal shadow form
+            ctx.fillStyle = '#2a0040';
+            ctx.beginPath();
+            ctx.ellipse(this.x, this.y, this.width/2, this.height/2, 0, 0, Math.PI * 2);
+            ctx.fill();
+        }
+        
+        // Shadow wisps
+        for (let i = 0; i < 3; i++) {
+            const wispX = this.x + Math.sin(this.shadowPhase + i) * 15;
+            const wispY = this.y + Math.cos(this.shadowPhase + i) * 10;
+            const wispSize = 3 + Math.sin(this.shadowPhase * 2 + i) * 2;
+            
+            ctx.fillStyle = '#6a0099';
+            ctx.beginPath();
+            ctx.arc(wispX, wispY, wispSize, 0, Math.PI * 2);
+            ctx.fill();
+        }
+        
+        // Glowing eyes
+        ctx.shadowColor = '#ff00ff';
+        ctx.shadowBlur = 10;
+        ctx.fillStyle = '#ff00ff';
+        ctx.beginPath();
+        ctx.arc(this.x - 6, this.y - 5, 2, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(this.x + 6, this.y - 5, 2, 0, Math.PI * 2);
+        ctx.fill();
+        
+        ctx.shadowBlur = 0;
+        ctx.globalAlpha = 1;
+        
+        // Dash warning
+        if (this.dashCooldown > 150 && this.dashCooldown < 180) {
+            ctx.fillStyle = 'rgba(255, 0, 255, 0.5)';
+            ctx.fillRect(this.x - 20, this.y - 30, 40, 15);
+            ctx.fillStyle = '#fff';
+            ctx.font = 'bold 12px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText('DASH!', this.x, this.y - 20);
+        }
+    }
+
+    isOffScreen() {
+        return this.y > canvas.height + 50;
     }
 }
 
@@ -1321,8 +1709,99 @@ function applyPowerup(powerup) {
                 activePowerups.delete('freeze');
             }, 5000);
             break;
+        case 'clearAll':
+            // Clear all enemies immediately
+            enemies = [];
+            showMessage(`${powerup.icon} ${powerup.name}!`, '#ff4500');
+            break;
+        case 'skillDash':
+            hasSkill = true;
+            skillType = 'dash';
+            showMessage(`${powerup.icon} ${powerup.name}!`, '#ffff00');
+            break;
+        case 'skillShoot':
+            hasSkill = true;
+            skillType = 'shoot';
+            showMessage(`${powerup.icon} ${powerup.name}!`, '#ff6600');
+            break;
+        case 'skillShield':
+            hasSkill = true;
+            skillType = 'shield';
+            showMessage(`${powerup.icon} ${powerup.name}!`, '#00aaff');
+            break;
     }
     updateUI();
+}
+
+// Skill system
+function useSkill() {
+    if (!hasSkill || Date.now() - lastSkillUse < skillCooldown) return;
+    
+    lastSkillUse = Date.now();
+    
+    switch(skillType) {
+        case 'dash':
+            // Dash to next lane with invincibility
+            activePowerups.add('skillDashing');
+            helicopter.lane = (helicopter.lane + 1) % 3;
+            const lanePositions = [canvas.width * 0.25, canvas.width * 0.5, canvas.width * 0.75];
+            helicopter.targetX = lanePositions[helicopter.lane];
+            showMessage('⚡ Dash!', '#ffff00');
+            setTimeout(() => {
+                activePowerups.delete('skillDashing');
+            }, 500);
+            break;
+            
+        case 'shoot':
+            // Laser beam across screen
+            createLaserBeam();
+            showMessage('🔥 Laser!', '#ff6600');
+            break;
+            
+        case 'shield':
+            // Temporary shield
+            hasShield = true;
+            showMessage('🛡️ Shield!', '#00aaff');
+            setTimeout(() => {
+                hasShield = false;
+            }, 3000);
+            break;
+    }
+    updateUI();
+}
+
+function createLaserBeam() {
+    // Create laser that destroys all enemies in helicopter's lane
+    const helicopterLane = helicopter.lane;
+    const lanePositions = [canvas.width * 0.25, canvas.width * 0.5, canvas.width * 0.75];
+    const laneX = lanePositions[helicopterLane];
+    
+    // Visual laser effect
+    const laser = {
+        x: laneX,
+        y: 0,
+        width: 10,
+        height: canvas.height,
+        duration: 500,
+        startTime: Date.now()
+    };
+    
+    // Store laser for rendering
+    if (!window.activeLasers) window.activeLasers = [];
+    window.activeLasers.push(laser);
+    
+    // Remove enemies in this lane
+    enemies = enemies.filter(enemy => {
+        const enemyLanePos = [canvas.width * 0.25, canvas.width * 0.5, canvas.width * 0.75];
+        const enemyLane = enemyLanePos.findIndex(pos => Math.abs(enemy.x - pos) < 50);
+        return enemyLane !== helicopterLane;
+    });
+    
+    // Remove laser after duration
+    setTimeout(() => {
+        const index = window.activeLasers.indexOf(laser);
+        if (index > -1) window.activeLasers.splice(index, 1);
+    }, laser.duration);
 }
 
 // Enhanced enemy spawning with chapter-specific enemies
@@ -1335,14 +1814,20 @@ function createEnemy(type, lane) {
             return new Bat(lane);
         case 'ghost':
             return new Ghost(lane);
+        case 'worm':
+            return new Worm(lane);
         case 'spider':
             return new Spider(lane);
         case 'demon':
             return new Demon(lane);
+        case 'eye':
+            return new Eye(lane);
         case 'skull':
             return new Skull(lane);
         case 'tentacle':
             return new Tentacle(lane);
+        case 'shadow':
+            return new Shadow(lane);
         default:
             return new Bat(lane);
     }
@@ -1590,10 +2075,13 @@ function checkCollisions() {
         height: helicopter.height
     };
     
-    // Check helicopter vs enemies (skip if invisible)
+    // Check helicopter vs enemies (skip if invisible or dashing)
     enemies.forEach((enemy, enemyIndex) => {
         // Skip collision if invisible powerup is active
         if (activePowerups.has('invisible')) return;
+        
+        // Skip collision if skill dashing is active
+        if (activePowerups.has('skillDashing')) return;
         
         // Skip collision for ghost enemies when they're invisible
         if (enemy.type === 'ghost' && !enemy.isVisible) return;
@@ -1936,7 +2424,17 @@ function spawnObjects() {
     const now = Date.now();
     
     // Enhanced enemy spawning with chapter-specific enemies
-    const enemySpawnInterval = isBossFight ? 1500 : (2200 - (currentChapter - 1) * 200); // Faster in later chapters
+    let enemySpawnInterval;
+    if (isBossFight) {
+        enemySpawnInterval = 1500;
+    } else {
+        switch(currentChapter) {
+            case 1: enemySpawnInterval = 2200; break;
+            case 2: enemySpawnInterval = 2800; break; // Slower spawn rate for chapter 2
+            case 3: enemySpawnInterval = 1800; break; // Faster for chapter 3
+            default: enemySpawnInterval = 2200;
+        }
+    }
     if (now - lastBatSpawn > enemySpawnInterval) {
         const chapterEnemyTypes = chapterEnemies[currentChapter] || ['bat'];
         const enemyType = chapterEnemyTypes[Math.floor(Math.random() * chapterEnemyTypes.length)];
