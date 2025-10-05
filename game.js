@@ -221,7 +221,7 @@ let enemyIntroduced = {
 // Chapter-specific enemy data
 const chapterEnemies = {
     1: ['bat', 'ghost'], // Chapter 1 enemies
-    2: ['spider', 'demon'], // Chapter 2 enemies  
+    2: ['bat', 'ghost', 'spider', 'demon'], // Chapter 2 enemies with all chapter 1 enemies
     3: ['skull', 'tentacle'] // Chapter 3 enemies
 };
 
@@ -644,7 +644,7 @@ class Spider {
         this.y = -30;
         this.width = 28;
         this.height = 22;
-        this.speed = 4.5 + (currentChapter - 1) * 0.7; // Very fast
+        this.speed = 3.2 + (currentChapter - 1) * 0.5; // Reduced speed for better balance
         this.legAnimation = 0;
         this.zigzag = 0;
     }
@@ -715,7 +715,7 @@ class Demon {
         this.y = -30;
         this.width = 32;
         this.height = 28;
-        this.speed = 3 + (currentChapter - 1) * 0.5;
+        this.speed = 2.5 + (currentChapter - 1) * 0.4; // Reduced speed for better balance
         this.teleportTimer = 0;
         this.flame = 0;
         this.isVisible = true;
@@ -1745,9 +1745,14 @@ function updateHistoryDisplay() {
         const seconds = entry.time % 60;
         const timeStr = `${minutes}:${seconds.toString().padStart(2, '0')}`;
         
+        // Special display for total completion time (chapter 0)
+        const displayText = entry.chapter === 0 ? 
+            `🏆 HOÀN THÀNH TOÀN BỘ - ${timeStr}` : 
+            `Chương ${entry.chapter} - ${timeStr}`;
+        
         historyItem.innerHTML = `
             <span class="history-icon">${icon}</span>
-            <span class="history-text">Chương ${entry.chapter} - ${timeStr}</span>
+            <span class="history-text">${displayText}</span>
         `;
         
         historyContainer.appendChild(historyItem);
@@ -1859,6 +1864,9 @@ function updateChapterTheme() {
 
 function showVictoryScreen(totalTime) {
     gameState = 'gameOver';
+    
+    // Save total completion time to history as a milestone
+    saveGameHistory(0, true, totalTime); // Use chapter 0 to represent total completion
     
     // Create victory modal
     const victoryModal = document.createElement('div');
