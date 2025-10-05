@@ -2089,6 +2089,29 @@ function checkCollisions() {
         // Skip collision for demon enemies when they're teleporting
         if (enemy.type === 'demon' && !enemy.isVisible) return;
         
+        // Check collision with Eye enemy lasers
+        if (enemy.type === 'eye' && enemy.lasers) {
+            enemy.lasers.forEach((laser, laserIndex) => {
+                const distance = Math.sqrt(
+                    Math.pow(helicopter.x - laser.x, 2) + 
+                    Math.pow(helicopter.y - laser.y, 2)
+                );
+                
+                if (distance < 20) { // Collision detected with laser
+                    if (hasShield) {
+                        hasShield = false;
+                        showMessage('🛡️ Khiên bị phá hủy!', '#ffaa00');
+                    } else {
+                        health--;
+                        showMessage('💥 Bị laser bắn!', '#ff0000');
+                    }
+                    // Remove the laser after hit
+                    enemy.lasers.splice(laserIndex, 1);
+                    return;
+                }
+            });
+        }
+        
         const enemyRect = {
             x: enemy.x - enemy.width/2,
             y: enemy.y - enemy.height/2,
