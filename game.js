@@ -193,6 +193,7 @@ const bossQuizData = {
 
 // Player stats
 let health = 3;
+let maxHealth = 3;
 let hasShield = false;
 let canShoot = false;
 let questionsAnswered = 0;
@@ -303,16 +304,10 @@ const allPowerups = [
         description: 'Tự động bắn liên tục'
     },
     {
-        id: 'doubleScore',
-        name: 'Điểm Kép',
-        icon: '✨',
-        description: 'Thời gian trôi chậm hơn'
-    },
-    {
-        id: 'magnet',
-        name: 'Nam Châm',
-        icon: '🧲',
-        description: 'Thu hút dấu ? từ xa'
+        id: 'maxHealth',
+        name: 'Tăng Giới Hạn Máu',
+        icon: '💗',
+        description: 'Tăng giới hạn máu tối đa lên 5'
     },
     {
         id: 'invisible',
@@ -1227,7 +1222,7 @@ function introduceNewEnemy(enemyType) {
     const info = enemyInfo[enemyType];
     
     showPause(`🆕 Quái Mới Xuất Hiện!`, 
-        `${info.name}\n\nKỹ năng: ${info.skills}\n\nBấm SPACE để tiếp tục`, 
+        `${info.name}\n\nKỹ năng: ${info.skills}`, 
         () => {
             gameState = 'playing';
         });
@@ -1238,8 +1233,8 @@ function giveSmartRandomBuff() {
     // Get available powerups for current chapter (exclude used ones)
     const chapterPowerups = allPowerups.filter(p => 
         !powerupHistory.includes(p.id) || 
-        (p.id === 'heal1' && health < 3) || 
-        (p.id === 'heal3' && health < 3)
+        (p.id === 'heal1' && health < maxHealth) || 
+        (p.id === 'heal3' && health < maxHealth)
     );
     
     if (chapterPowerups.length === 0) {
@@ -1264,7 +1259,7 @@ function applyPowerup(powerup) {
             showMessage(`${powerup.icon} ${powerup.name}!`, '#00ff00');
             break;
         case 'heal1':
-            if (health < 3) {
+            if (health < maxHealth) {
                 health++;
                 showMessage(`${powerup.icon} ${powerup.name}!`, '#ff69b4');
             } else {
@@ -1272,7 +1267,7 @@ function applyPowerup(powerup) {
             }
             break;
         case 'heal3':
-            health = 3;
+            health = maxHealth;
             showMessage(`${powerup.icon} ${powerup.name}!`, '#ff1493');
             break;
         case 'timeReduce':
@@ -1309,17 +1304,10 @@ function applyPowerup(powerup) {
                 clearInterval(autoShootInterval);
             }, 12000);
             break;
-        case 'doubleScore':
-            showMessage(`${powerup.icon} ${powerup.name}!`, '#ffdd00');
-            setTimeout(() => {
-                activePowerups.delete('doubleScore');
-            }, 15000);
-            break;
-        case 'magnet':
-            showMessage(`${powerup.icon} ${powerup.name}!`, '#0099ff');
-            setTimeout(() => {
-                activePowerups.delete('magnet');
-            }, 8000);
+        case 'maxHealth':
+            maxHealth = 5;
+            health = Math.min(health + 2, maxHealth); // Tăng 2 máu khi nhận powerup
+            showMessage(`${powerup.icon} ${powerup.name}!`, '#ff1493');
             break;
         case 'invisible':
             showMessage(`${powerup.icon} ${powerup.name}!`, '#aa88ff');
@@ -1368,6 +1356,7 @@ function initGame() {
     questionMarks = [];
     boss = null;
     health = 3;
+    maxHealth = 3;
     hasShield = false;
     canShoot = false;
     questionsAnswered = 0;
@@ -1407,7 +1396,7 @@ function updateUI() {
     for (let i = 0; i < health; i++) {
         heartsDisplay += '❤️';
     }
-    for (let i = health; i < 3; i++) {
+    for (let i = health; i < maxHealth; i++) {
         heartsDisplay += '🖤';
     }
     document.getElementById('hearts').innerHTML = heartsDisplay;
@@ -1625,20 +1614,8 @@ function checkCollisions() {
         }
     });
     
-    // Check helicopter vs question marks with magnet effect
+    // Check helicopter vs question marks
     questionMarks.forEach((qm, qmIndex) => {
-        // Magnet effect - pull question marks toward helicopter
-        if (activePowerups.has('magnet')) {
-            const dx = helicopter.x - qm.x;
-            const dy = helicopter.y - qm.y;
-            const distance = Math.sqrt(dx * dx + dy * dy);
-            
-            if (distance < 100) { // Magnet range
-                qm.x += dx * 0.1;
-                qm.y += dy * 0.1;
-            }
-        }
-        
         const qmRect = {
             x: qm.x - qm.width/2,
             y: qm.y - qm.height/2,
@@ -1785,8 +1762,11 @@ function restartFromChapter(chapter) {
     chapterStartTime = Date.now();
     gameTime = 0;
     health = 3;
+    maxHealth = 3;
     hasShield = false;
     canShoot = false;
+    activePowerups.clear();
+    powerupHistory = [];
     isBossFight = false;
     boss = null;
     enemies = [];
@@ -1825,6 +1805,7 @@ function completeChapter() {
                 chapterStartTime = Date.now();
                 gameTime = 0; // Reset chapter timer
                 health = 3; // Reset health
+                maxHealth = 3; // Reset max health
                 hasShield = false; // Reset buffs
                 canShoot = false;
                 activePowerups.clear(); // Clear all powerups
